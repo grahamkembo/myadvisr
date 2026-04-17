@@ -771,58 +771,80 @@ def show_onboarding():
       </p>
     </div>""", unsafe_allow_html=True)
 
-    col1,col2,col3 = st.columns([1,2,1])
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("onboard"):
-            st.markdown("#### Tell us about yourself")
-            name  = st.text_input("First name", placeholder="e.g. Graham")
-            level = st.radio("Degree level", ["Undergraduate","Graduate"], horizontal=True)
+        st.markdown("#### Tell us about yourself")
 
-            if level=="Undergraduate":
-                school = st.selectbox("School / College", list(UG_PROGRAMS.keys()))
-                major  = st.selectbox("Your major", list(UG_PROGRAMS[school].keys()))
-            else:
-                school = st.selectbox("Graduate program area", list(GRAD_PROGRAMS.keys()))
-                major  = st.selectbox("Your program", list(GRAD_PROGRAMS[school].keys()))
+        # All widgets outside st.form so school->major cascade reruns instantly
+        name  = st.text_input("First name", placeholder="e.g. Graham", key="ob_name")
+        level = st.radio("Degree level", ["Undergraduate", "Graduate"],
+                         horizontal=True, key="ob_level")
 
-            year    = st.selectbox("Academic year / standing", YEARS)
-            cr_lbl  = "Credits completed" if level=="Undergraduate" else "Graduate credits completed"
-            credits = st.number_input(cr_lbl, min_value=0, max_value=250, value=0, step=1)
+        if level == "Undergraduate":
+            school = st.selectbox("School / College",
+                                  list(UG_PROGRAMS.keys()), key="ob_school")
+            major  = st.selectbox("Your major",
+                                  list(UG_PROGRAMS[school].keys()),
+                                  key=f"ob_major_{school}")
+        else:
+            school = st.selectbox("Graduate program area",
+                                  list(GRAD_PROGRAMS.keys()), key="ob_school")
+            major  = st.selectbox("Your program",
+                                  list(GRAD_PROGRAMS[school].keys()),
+                                  key=f"ob_major_{school}")
 
-            st.markdown("**Career interests** *(select all that apply)*")
-            chosen=[]; cols2=st.columns(2)
-            for i,opt in enumerate(CAREER_OPTIONS):
-                with cols2[i%2]:
-                    if st.checkbox(opt,key=f"c_{i}"): chosen.append(opt)
+        year = st.selectbox("Academic year / standing", YEARS, key="ob_year")
 
-            career_other=""
-            if "Other (describe below)" in chosen:
-                career_other = st.text_input("Describe your career interest",
-                    placeholder="e.g. Sports analytics, climate tech, film production...")
+        cr_lbl = ("Credits completed so far" if level == "Undergraduate"
+                  else "Graduate credits completed so far")
+        credits = st.number_input(cr_lbl, min_value=0, max_value=250,
+                                  value=0, step=1, key="ob_credits")
 
-            challenges = st.text_area("Any challenges or goals? *(optional)*",
-                placeholder="e.g. Struggling with calculus, want a co-op, unsure which electives...",height=80)
-            submitted = st.form_submit_button("Launch myAdvisr →", use_container_width=True)
+        st.markdown("**Career interests** *(select all that apply)*")
+        chosen = []
+        cols2  = st.columns(2)
+        for i, opt in enumerate(CAREER_OPTIONS):
+            with cols2[i % 2]:
+                if st.checkbox(opt, key=f"ob_c_{i}"):
+                    chosen.append(opt)
 
-        if submitted:
-            final = [c for c in chosen if c!="Other (describe below)"]
+        career_other = ""
+        if "Other (describe below)" in chosen:
+            career_other = st.text_input(
+                "Describe your career interest",
+                placeholder="e.g. Sports analytics, climate tech, film production...",
+                key="ob_career_other")
+
+        challenges = st.text_area(
+            "Any challenges or goals? *(optional)*",
+            placeholder="e.g. Struggling with calculus, want a co-op, unsure which electives...",
+            height=80, key="ob_challenges")
+
+        if st.button("Launch myAdvisr →", use_container_width=True, key="ob_submit"):
+            final        = [c for c in chosen if c != "Other (describe below)"]
+            saved_credits = int(st.session_state.get("ob_credits", 0))
             st.session_state.update({
-                "name": name.strip() or "Student",
-                "level": level, "school": school, "major": major,
-                "year": year, "credits": int(credits),
-                "careers": final or ["Software Engineering"],
+                "name":         name.strip() or "Student",
+                "level":        level,
+                "school":       school,
+                "major":        major,
+                "year":         year,
+                "credits":      saved_credits,
+                "careers":      final or ["Software Engineering"],
                 "career_other": career_other.strip(),
-                "challenges": challenges, "onboarded": True,
+                "challenges":   challenges,
+                "onboarded":    True,
             })
-            info = get_prog_info()
+            info  = get_prog_info()
             total = info["cr"]
-            ac = all_careers()
-            welcome=(f"Hi {st.session_state.name}! I'm myAdvisr, your AI academic advisor "
-                     f"for Clarkson University. You're in the {major} program ({total} credits required) "
-                     f"with {int(credits)} credits completed.\n\n"
-                     f"I've built your personalized dashboard using real Clarkson program data. "
-                     f"Ask me anything — courses, co-ops, career planning, or campus resources. Go Knights!")
-            st.session_state.messages=[{"role":"assistant","content":welcome}]
+            welcome = (
+                f"Hi {st.session_state.name}! I'm myAdvisr, your AI academic advisor "
+                f"for Clarkson University. You're in the {major} program ({total} credits required) "
+                f"with {saved_credits} credits completed.\n\n"
+                f"I've built your personalized dashboard using real Clarkson program data. "
+                f"Ask me anything \u2014 courses, co-ops, career planning, or campus resources. Go Knights!"
+            )
+            st.session_state.messages = [{"role": "assistant", "content": welcome}]
             st.rerun()
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
