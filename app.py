@@ -9,6 +9,14 @@ import streamlit as st
 from anthropic import Anthropic
 import math
 
+# RAG — always define first so name is always in scope
+RAG_AVAILABLE = False
+try:
+    from rag_engine import init_rag, retrieve_and_format, get_index_stats
+    RAG_AVAILABLE = True
+except Exception:
+    RAG_AVAILABLE = False
+
 st.set_page_config(
     page_title="myAdvisr | Clarkson University",
     page_icon="🎓",
@@ -726,6 +734,14 @@ def init_state():
 
 init_state()
 
+# Initialise RAG knowledge base on startup (cached — runs once per session)
+if RAG_AVAILABLE:
+    try:
+        with st.spinner("Loading knowledge base..."):
+            init_rag()
+    except Exception:
+        RAG_AVAILABLE = False
+
 def get_prog_info():
     lv = st.session_state.level
     mj = st.session_state.major
@@ -1125,17 +1141,45 @@ def tab_chat():
 
 def get_claude_response(user_message):
     try:
-        client=Anthropic()
-        history=[{"role":m["role"],"content":m["content"]}
-                 for m in st.session_state.messages[:-1] if m["role"] in ("user","assistant")]
-        response=client.messages.create(
-            model="claude-sonnet-4-5", max_tokens=512,
-            system=build_system_prompt(),
-            messages=history+[{"role":"user","content":user_message}])
+        client = Anthropic()
+        history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.messages[:-1]
+            if m["role"] in ("user", "assistant")
+        ]
+
+        # RAG: retrieve relevant knowledge base chunks and inject into prompt
+        rag_context = ""
+        if RAG_AVAILABLE:
+            try:
+                student_profile = {
+                    "major":   st.session_state.get("major", ""),
+                    "level":   st.session_state.get("level", ""),
+                    "careers": st.session_state.get("careers", []),
+                    "year":    st.session_state.get("year", ""),
+                    "credits": st.session_state.get("credits", 0),
+                }
+                rag_context = retrieve_and_format(user_message, student_profile)
+            except Exception:
+                rag_context = ""
+
+        # Append retrieved context to the system prompt
+        system = build_system_prompt()
+        if rag_context:
+            system = system + "\n\n" + rag_context
+
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=600,
+            system=system,
+            messages=history + [{"role": "user", "content": user_message}],
+        )
         return response.content[0].text
     except Exception as e:
-        return (f"I am having trouble connecting right now ({type(e).__name__}). "
-                "Make sure your ANTHROPIC_API_KEY is set and try again.")
+        return (
+            f"I am having trouble connecting right now ({type(e).__name__}). "
+            "Make sure your ANTHROPIC_API_KEY is set and try again."
+        )
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main():
