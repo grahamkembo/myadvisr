@@ -1068,9 +1068,26 @@ def build_system_prompt():
     )
 
 def tab_chat():
-    st.markdown('<div style="font-size:0.8rem;color:#555;margin-bottom:1rem;">'
-                'Powered by Claude · Knows real Clarkson programs, credits, and resources</div>',
-                unsafe_allow_html=True)
+    if RAG_AVAILABLE:
+        try:
+            stats = get_index_stats()
+            rag_badge = (
+                f'<span style="background:#eef7e6;color:#3a6e00;padding:2px 8px;'
+                f'border-radius:100px;font-size:0.72rem;font-weight:600;">'
+                f'RAG ACTIVE · {stats["total_documents"]} docs indexed</span>'
+            ) if stats["status"] == "ready" else ""
+        except Exception:
+            rag_badge = ""
+    else:
+        rag_badge = (
+            '<span style="background:#fffbea;color:#8a6c00;padding:2px 8px;'
+            'border-radius:100px;font-size:0.72rem;font-weight:600;">'
+            'Install sentence-transformers & chromadb to enable RAG</span>'
+        )
+    st.markdown(
+        f'<div style="font-size:0.8rem;color:#555;margin-bottom:1rem;">'
+        f'Powered by Claude · {rag_badge} · Grounded in real Clarkson data</div>',
+        unsafe_allow_html=True)
     st.markdown("**Quick questions:**")
     is_grad=st.session_state.level=="Graduate"
     qcols=st.columns(4)
